@@ -1,1 +1,1 @@
-from .muvfde_ext import add, __doc__
+from .muvfde_ext import FixedDimensionalEncodingConfig, __doc__
