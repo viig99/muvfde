@@ -1,16 +1,24 @@
+name: Sync benchmark
+
+on:
+  workflow_dispatch:
+
 jobs:
   sync-benchmark:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Inject benchmark into README
         run: |
           sed -e '/<!-- BEGIN BENCHMARK -->/ {
-                r integeration_test/benchmark.md
-                d
-              }' README.md > README.tmp
+            r integeration_test/benchmark.md
+            d
+          }' README.md > README.tmp
           mv README.tmp README.md
+
       - name: Commit README changes
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: chore: sync benchmark into README
+          file_pattern: README.md
