@@ -12,6 +12,14 @@ A library to generate fixed dimensional embeddings for multi-dimensional vectors
 pip install --upgrade muvfde
 ```
 
+## Integeration Benchmark
+```shell script
+uv venv --python 3.12
+uv pip install -e .
+uv pip install -r integeration_test/requirements.txt
+python integeration_test/benchmark.py
+```
+
 ## References
 * [Google Muvera Blog](https://research.google/blog/muvera-making-multi-vector-retrieval-as-fast-as-single-vector-search/)
 * [MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings](https://arxiv.org/abs/2405.19504)

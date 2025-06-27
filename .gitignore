@@ -10,3 +10,4 @@ build
 .venv
 *.lock
 **/_version.py
+results/

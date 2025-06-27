@@ -1,0 +1,5 @@
+mteb[pylate]
+pylate
+numpy
+pandas
+tabulate

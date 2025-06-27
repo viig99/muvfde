@@ -45,8 +45,8 @@ def test_generate_fde_for_document():
     config.enable_fill_empty(True)
     config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
 
-    input_embedding_matrix = np.random.rand(40, 768).astype(
-        np.float32)  # 40 points, 768 dimensions
+    input_embedding_matrix = np.random.rand(2048, 768).astype(
+        np.float32)  # 2048 points, 768 dimensions
 
     fde = muvfde.generate_fixed_dimensional_encoding(
         input_embedding_matrix, config)
