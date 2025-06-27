@@ -53,6 +53,11 @@ nanobind_add_module(
 
   # Source code goes here
   src/${SKBUILD_PROJECT_NAME}_ext.cpp
+  src/fixed_dimensional_encoding.cpp
+)
+target_include_directories(${SKBUILD_PROJECT_NAME}_ext
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}
 )
 
 # Install directive for scikit-build-core

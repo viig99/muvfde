@@ -1,6 +1,7 @@
 #include <nanobind/nanobind.h>
 #include <cstdint>
 #include "fixed_dimensional_encoding_config.h"
+#include "fixed_dimensional_encoding.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -40,4 +41,9 @@ NB_MODULE(muvfde_ext, m) {
         .value("DEFAULT_IDENTITY", multidimensional_encoding::ProjectionType::DEFAULT_IDENTITY)
         .value("AMS_SKETCH",       multidimensional_encoding::ProjectionType::AMS_SKETCH)
         .export_values();
+
+    m.def("generate_fixed_dimensional_encoding",
+          &multidimensional_encoding::GenerateFixedDimensionalEncoding,
+          "input_embedding_matrix"_a, "config"_a,
+          "Generates a fixed-dimensional encoding for the input embedding matrix using the provided configuration.");
 }
