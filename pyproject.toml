@@ -8,11 +8,27 @@ dynamic = ["version"]
 description = "Fixed Dimensional Embeddings for Multi-dimensional vectors."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [
-    { name = "Arjun Variar", email = "accio.arjun@gmail.com" },
-]
+authors = [{ name = "Arjun Variar", email = "accio.arjun@gmail.com" }]
+
+# PEP 639 license metadata
+license = "Apache-2.0"
+license-files      = ["LICENSE"]
+
 classifiers = [
-    "License :: OSI Approved :: Apache 2.0 License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: C++",
+
+    "Topic :: Software Development :: Libraries :: Python Modules",
+
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
 ]
 
 [project.urls]
@@ -37,7 +53,7 @@ write_to = "src/muvfde/_version.py"
 [tool.cibuildwheel]
 # Necessary to see build output from the actual compilation
 build-verbosity = 1
-archs = ["auto64"] # Build only 64-bit wheels
+archs = ["auto64"]  # Build only 64-bit wheels
 skip = "pp*"
 
 # Run pytest to ensure that the package was correctly built
@@ -45,7 +61,7 @@ test-command = "pytest {project}/tests"
 test-requires = ["pytest", "numpy"]
 
 # Don't test Python 3.8 wheels on macOS/arm64
-test-skip="cp38-macosx_*:arm64"
+test-skip = "cp38-macosx_*:arm64"
 
 # Needed for full C++17 support
 [tool.cibuildwheel.macos.environment]
