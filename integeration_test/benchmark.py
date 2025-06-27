@@ -80,26 +80,40 @@ kwargs = {
 corpus_chunk_size = 32
 colbert = mteb.get_model(colbert_model_name)
 jina = mteb.get_model(jina_model_name, **kwargs)
-fde_model = FdeLateInteractionModel(jina_model_name, **kwargs)
+fde_jina_model = FdeLateInteractionModel(jina_model_name, **kwargs)
+fde_jina_model.mteb_model_meta = jina.mteb_model_meta
+fde_jina_model.mteb_model_meta.name = "FDE Jina v2"
+fde_jina_model.mteb_model_meta.revision = "no-revision"
+
+fde_model_colbert = FdeLateInteractionModel(colbert_model_name)
+fde_model_colbert.mteb_model_meta = colbert.mteb_model_meta
+fde_model_colbert.mteb_model_meta.name = "FDE ColBERT v2"
+fde_model_colbert.mteb_model_meta.revision = "no-revision"
 
 tasks = mteb.get_tasks(tasks=["NFCorpus"], languages=["eng"], task_types=["Retrieval"])
 evaluator = mteb.MTEB(tasks=tasks)
 
 res1 = evaluator.run(colbert, eval_splits=["test"], corpus_chunk_size=corpus_chunk_size, verbosity=1)
 res2 = evaluator.run(jina, eval_splits=["test"], corpus_chunk_size=corpus_chunk_size, verbosity=1)
-res3 = evaluator.run(fde_model,
+res3 = evaluator.run(fde_jina_model,
+                     eval_splits=["test"],
+                     corpus_chunk_size=corpus_chunk_size,
+                     verbosity=1)
+res4 = evaluator.run(fde_model_colbert,
                      eval_splits=["test"],
                      corpus_chunk_size=corpus_chunk_size,
                      verbosity=1)
 
 colbert_scores = res1[0].scores['test'][0]
 jina_scores = res2[0].scores['test'][0]
-fde_scores = res3[0].scores['test'][0]
+fde_jina_scores = res3[0].scores['test'][0]
+fde_colbert_scores = res4[0].scores['test'][0]
 
 df = pd.DataFrame({
     'Metric': list(colbert_scores.keys()),
     'ColBERT v2': list(colbert_scores.values()),
+    'FDE ColBERT v2': [fde_colbert_scores[k] for k in colbert_scores.keys()],
     'Jina ColBERT v2': [jina_scores[k] for k in colbert_scores.keys()],
-    'FDE': [fde_scores[k] for k in colbert_scores.keys()]
+    'FDE Jina v2': [fde_jina_scores[k] for k in colbert_scores.keys()],
 })
 df.to_markdown("integeration_test/benchmark.md", index=False)
