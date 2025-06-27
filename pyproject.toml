@@ -38,6 +38,7 @@ write_to = "src/muvfde/_version.py"
 # Necessary to see build output from the actual compilation
 build-verbosity = 1
 archs = ["auto64"] # Build only 64-bit wheels
+skip = "pp*"
 
 # Run pytest to ensure that the package was correctly built
 test-command = "pytest {project}/tests"
