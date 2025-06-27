@@ -21,8 +21,7 @@ namespace multidimensional_encoding
 
         /* ---------- ctor with proto-equivalent defaults ---------- */
         FixedDimensionalEncodingConfig()
-            : dimension_(0),
-              num_repetitions_(1),
+            : num_repetitions_(1),
               num_simhash_projections_(0),
               seed_(1),
               encoding_type_(EncodingType::DEFAULT_SUM),
@@ -32,11 +31,6 @@ namespace multidimensional_encoding
               final_projection_dimension_(0) {}
 
         /* ---------- fluent setters (optional) ---------- */
-        FixedDimensionalEncodingConfig &set_dimension(int32_t d)
-        {
-            dimension_ = d;
-            return *this;
-        }
         FixedDimensionalEncodingConfig &set_num_repetitions(int32_t r)
         {
             num_repetitions_ = r;
@@ -79,7 +73,6 @@ namespace multidimensional_encoding
         }
 
         /* ---------- read-only accessors (mirrors proto API) ---------- */
-        int32_t dimension() const { return dimension_; }
         int32_t num_repetitions() const { return num_repetitions_; }
         int32_t num_simhash_projections() const { return num_simhash_projections_; }
         int32_t seed() const { return seed_; }
@@ -95,7 +88,6 @@ namespace multidimensional_encoding
 
     private:
         /* ---------- data ---------- */
-        int32_t dimension_;
         int32_t num_repetitions_;
         int32_t num_simhash_projections_;
         int32_t seed_;

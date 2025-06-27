@@ -2,7 +2,6 @@ import muvfde
 
 def test_default_configs():
     config = muvfde.fixed_dimensional_encoding_config()
-    assert config.dimension == 0
     assert config.num_repetitions == 1
     assert config.num_simhash_projections == 0
     assert config.seed == 1
@@ -14,7 +13,6 @@ def test_default_configs():
 
 def test_config_setters():
     config = muvfde.fixed_dimensional_encoding_config()
-    config.set_dimension(10)
     config.set_num_repetitions(2)
     config.set_num_simhash_projections(5)
     config.set_seed(42)
@@ -24,7 +22,6 @@ def test_config_setters():
     config.set_encoding_type(muvfde.encoding_type.AVERAGE)
     config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
 
-    assert config.dimension == 10
     assert config.num_repetitions == 2
     assert config.num_simhash_projections == 5
     assert config.seed == 42

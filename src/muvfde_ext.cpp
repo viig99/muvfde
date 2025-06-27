@@ -13,7 +13,6 @@ NB_MODULE(muvfde_ext, m) {
         // default ctor
         .def(nb::init<>())
         // fluent setters
-        .def("set_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_dimension, "d"_a)
         .def("set_num_repetitions", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_num_repetitions, "r"_a)
         .def("set_num_simhash_projections", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_num_simhash_projections, "k"_a)
         .def("set_seed", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_seed, "s"_a)
@@ -23,7 +22,6 @@ NB_MODULE(muvfde_ext, m) {
         .def("enable_fill_empty", &multidimensional_encoding::FixedDimensionalEncodingConfig::enable_fill_empty, "v"_a = true)
         .def("set_final_projection_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_final_projection_dimension, "d"_a)
         // read-only accessors as Python properties
-        .def_prop_ro("dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::dimension)
         .def_prop_ro("num_repetitions", &multidimensional_encoding::FixedDimensionalEncodingConfig::num_repetitions)
         .def_prop_ro("num_simhash_projections", &multidimensional_encoding::FixedDimensionalEncodingConfig::num_simhash_projections)
         .def_prop_ro("seed", &multidimensional_encoding::FixedDimensionalEncodingConfig::seed)
