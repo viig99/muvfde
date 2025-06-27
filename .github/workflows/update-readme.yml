@@ -21,4 +21,3 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "chore: sync benchmark into README"
-          file_pattern: "README.md"
