@@ -7,7 +7,7 @@ name = "muvfde"
 dynamic = ["version"]
 description = "Fixed Dimensional Embeddings for Multi-dimensional vectors."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 authors = [
     { name = "Arjun Variar", email = "accio.arjun@gmail.com" },
 ]
