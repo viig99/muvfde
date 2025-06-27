@@ -121,4 +121,5 @@ df = pd.DataFrame({
     'Jina ColBERT v2': [jina_scores[k] for k in colbert_scores.keys()],
     'FDE Jina v2': [fde_jina_scores[k] for k in colbert_scores.keys()],
 })
-df.to_markdown("integeration_test/benchmark.md", index=False)
+# Show only .5f
+df.to_markdown("integeration_test/benchmark.md", index=False, tablefmt="github")
