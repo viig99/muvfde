@@ -64,27 +64,42 @@ class FdeLateInteractionModel(Wrapper):
         return torch.from_numpy(a @ b.T)
 
 # 3. Instantiate & run
-colbert = mteb.get_model("colbert-ir/colbertv2.0")
-fde_model = FdeLateInteractionModel("colbert-ir/colbertv2.0")
+colbert_model_name = "colbert-ir/colbertv2.0"
+lightonai_model_name = "lightonai/GTE-ModernColBERT-v1"
+jina_model_name = "jinaai/jina-colbert-v2"
+kwargs = {
+    "trust_remote_code": True,
+    "attend_to_expansion_tokens": True,
+    "query_prefix": "[QueryMarker]",
+    "document_prefix": "[DocumentMarker]",
+    "device": "cuda" if torch.cuda.is_available() else "cpu",
+    "model_kwargs": {
+        "torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
+    }
+}
+corpus_chunk_size = 32
+colbert = mteb.get_model(colbert_model_name)
+jina = mteb.get_model(jina_model_name, **kwargs)
+fde_model = FdeLateInteractionModel(jina_model_name, **kwargs)
 
 tasks = mteb.get_tasks(tasks=["NFCorpus"], languages=["eng"], task_types=["Retrieval"])
 evaluator = mteb.MTEB(tasks=tasks)
 
-# raw ColBERT
-res1 = evaluator.run(colbert, eval_splits=["test"], corpus_chunk_size=1024, verbosity=1)
-
-# FDE compressed
-res2 = evaluator.run(fde_model,
+res1 = evaluator.run(colbert, eval_splits=["test"], corpus_chunk_size=corpus_chunk_size, verbosity=1)
+res2 = evaluator.run(jina, eval_splits=["test"], corpus_chunk_size=corpus_chunk_size, verbosity=1)
+res3 = evaluator.run(fde_model,
                      eval_splits=["test"],
-                     corpus_chunk_size=1024,
-                     verbosity=3)
+                     corpus_chunk_size=corpus_chunk_size,
+                     verbosity=1)
 
-raw_scores = res1[0].scores['test'][0]
-fde_scores = res2[0].scores['test'][0]
+colbert_scores = res1[0].scores['test'][0]
+jina_scores = res2[0].scores['test'][0]
+fde_scores = res3[0].scores['test'][0]
 
 df = pd.DataFrame({
-    'Metric': list(raw_scores.keys()),
-    'Raw ColBERT': list(raw_scores.values()),
-    'FDE ColBERT': [fde_scores[k] for k in raw_scores.keys()]
+    'Metric': list(colbert_scores.keys()),
+    'ColBERT v2': list(colbert_scores.values()),
+    'Jina ColBERT v2': [jina_scores[k] for k in colbert_scores.keys()],
+    'FDE': [fde_scores[k] for k in colbert_scores.keys()]
 })
-print(df.to_markdown(index=False))
+df.to_markdown("integeration_test/benchmark.md", index=False)

@@ -3,3 +3,4 @@ pylate
 numpy
 pandas
 tabulate
+einops

@@ -20,6 +20,9 @@ uv pip install -r integeration_test/requirements.txt
 python integeration_test/benchmark.py
 ```
 
+## Results
+<!-- BEGIN BENCHMARK -->
+
 ## References
 * [Google Muvera Blog](https://research.google/blog/muvera-making-multi-vector-retrieval-as-fast-as-single-vector-search/)
 * [MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings](https://arxiv.org/abs/2405.19504)
