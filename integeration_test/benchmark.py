@@ -8,29 +8,28 @@ from mteb.encoder_interface import PromptType
 from mteb.models.wrapper import Wrapper
 from pylate import models as colbert_model
 
-# 1. Build two configs
-query_config = muvfde.fixed_dimensional_encoding_config()
-query_config.set_num_repetitions(20)
-query_config.set_num_simhash_projections(5)
-query_config.set_projection_dimension(8)
-query_config.set_seed(1221)
-query_config.set_encoding_type(muvfde.encoding_type.DEFAULT_SUM)
-query_config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
-
-doc_config = muvfde.fixed_dimensional_encoding_config()
-doc_config.set_num_repetitions(20)
-doc_config.set_num_simhash_projections(5)
-doc_config.set_projection_dimension(8)
-doc_config.set_seed(1221)
-doc_config.set_encoding_type(muvfde.encoding_type.AVERAGE)
-doc_config.enable_fill_empty(True)
-doc_config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
-
 # 2. Wrapper takes both configs
 class FdeLateInteractionModel(Wrapper):
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, num_repetitions: int, num_simhash_projections: int, projection_dimension: int, seed: int = 1221, **kwargs):
         super().__init__()  # empty init for Wrapper
         self.colbert = colbert_model.ColBERT(model_name, revision=None, **kwargs)
+        query_config = muvfde.fixed_dimensional_encoding_config()
+        query_config.set_num_repetitions(num_repetitions)
+        query_config.set_num_simhash_projections(num_simhash_projections)
+        query_config.set_projection_dimension(projection_dimension)
+        query_config.set_seed(seed)
+        query_config.set_encoding_type(muvfde.encoding_type.DEFAULT_SUM)
+        query_config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
+
+        doc_config = muvfde.fixed_dimensional_encoding_config()
+        doc_config.set_num_repetitions(num_repetitions)
+        doc_config.set_num_simhash_projections(num_simhash_projections)
+        doc_config.set_projection_dimension(projection_dimension)
+        doc_config.set_seed(seed)
+        doc_config.set_encoding_type(muvfde.encoding_type.AVERAGE)
+        doc_config.enable_fill_empty(True)
+        doc_config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
+
         self.q_cfg = query_config
         self.d_cfg = doc_config
 
@@ -81,14 +80,14 @@ kwargs = {
 corpus_chunk_size = 32
 colbert = mteb.get_model(colbert_model_name)
 jina = mteb.get_model(jina_model_name, **kwargs)
-fde_jina_model = FdeLateInteractionModel(jina_model_name, **kwargs)
+fde_jina_model = FdeLateInteractionModel(jina_model_name, 20, 8, 16, **kwargs)
 fde_jina_model.mteb_model_meta = copy.deepcopy(jina.mteb_model_meta)
 fde_jina_model.mteb_model_meta.name = "FDE Jina v2"
 fde_jina_model.mteb_model_meta.revision = "no-revision"
 fde_jina_model.mteb_model_meta.similarity_fn_name = "dot"
 fde_jina_model.mteb_model_meta.framework = []
 
-fde_model_colbert = FdeLateInteractionModel(colbert_model_name)
+fde_model_colbert = FdeLateInteractionModel(colbert_model_name, 20, 5, 16)
 fde_model_colbert.mteb_model_meta = copy.deepcopy(colbert.mteb_model_meta)
 fde_model_colbert.mteb_model_meta.name = "FDE ColBERT v2"
 fde_model_colbert.mteb_model_meta.revision = "no-revision"
@@ -103,10 +102,12 @@ res2 = evaluator.run(jina, eval_splits=["test"], corpus_chunk_size=corpus_chunk_
 res3 = evaluator.run(fde_jina_model,
                      eval_splits=["test"],
                      corpus_chunk_size=corpus_chunk_size,
+                     overwrite_results=True,
                      verbosity=1)
 res4 = evaluator.run(fde_model_colbert,
                      eval_splits=["test"],
                      corpus_chunk_size=corpus_chunk_size,
+                     overwrite_results=True,
                      verbosity=1)
 
 colbert_scores = res1[0].scores['test'][0]
@@ -122,4 +123,6 @@ df = pd.DataFrame({
     'FDE Jina v2': [fde_jina_scores[k] for k in colbert_scores.keys()],
 })
 # Show only .5f
+df = df.round(5)
+df = df.set_index('Metric')
 df.to_markdown("integeration_test/benchmark.md", index=False, tablefmt="github")
