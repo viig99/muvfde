@@ -3,6 +3,7 @@ import mteb
 import muvfde
 import torch
 import pandas as pd
+import copy
 from mteb.encoder_interface import PromptType
 from mteb.models.wrapper import Wrapper
 from pylate import models as colbert_model
@@ -81,14 +82,18 @@ corpus_chunk_size = 32
 colbert = mteb.get_model(colbert_model_name)
 jina = mteb.get_model(jina_model_name, **kwargs)
 fde_jina_model = FdeLateInteractionModel(jina_model_name, **kwargs)
-fde_jina_model.mteb_model_meta = jina.mteb_model_meta
+fde_jina_model.mteb_model_meta = copy.deepcopy(jina.mteb_model_meta)
 fde_jina_model.mteb_model_meta.name = "FDE Jina v2"
 fde_jina_model.mteb_model_meta.revision = "no-revision"
+fde_jina_model.mteb_model_meta.similarity_fn_name = "dot"
+fde_jina_model.mteb_model_meta.framework = []
 
 fde_model_colbert = FdeLateInteractionModel(colbert_model_name)
-fde_model_colbert.mteb_model_meta = colbert.mteb_model_meta
+fde_model_colbert.mteb_model_meta = copy.deepcopy(colbert.mteb_model_meta)
 fde_model_colbert.mteb_model_meta.name = "FDE ColBERT v2"
 fde_model_colbert.mteb_model_meta.revision = "no-revision"
+fde_model_colbert.mteb_model_meta.similarity_fn_name = "dot"
+fde_model_colbert.mteb_model_meta.framework = []
 
 tasks = mteb.get_tasks(tasks=["NFCorpus"], languages=["eng"], task_types=["Retrieval"])
 evaluator = mteb.MTEB(tasks=tasks)
