@@ -20,6 +20,13 @@ uv pip install -r integeration_test/requirements.txt
 python integeration_test/benchmark.py
 ```
 
+## Usage
+Check out `integeration_test/benchmark.py` for usage examples.
+
+## Caveats
+* The FDE algorithm is highly hyperparameter sensitive. The hyperparameters used in the benchmark are not optimal for all models.
+* FDE quality is tightly linked to dimensionality; increase in dimensionality will generally result in quality gains.
+
 ## Results
 [Benchmark Results](https://github.com/viig99/muvfde/blob/main/integeration_test/benchmark.md)
 
