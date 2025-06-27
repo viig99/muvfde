@@ -69,6 +69,7 @@ nanobind_add_stub(
   OUTPUT ${SKBUILD_PROJECT_NAME}_ext.pyi  # sphinx is happy with this one
   PYTHON_PATH $<TARGET_FILE_DIR:${SKBUILD_PROJECT_NAME}_ext>
   DEPENDS ${SKBUILD_PROJECT_NAME}_ext
+  INSTALL_TIME
   MARKER_FILE py.typed
 )
 

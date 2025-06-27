@@ -9,3 +9,4 @@ build
 .vs
 .venv
 *.lock
+**/_version.py
