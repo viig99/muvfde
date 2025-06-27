@@ -21,7 +21,7 @@ python integeration_test/benchmark.py
 ```
 
 ## Results
-[Benchmark Results](integeration_test/benchmark.md)
+[Benchmark Results](https://github.com/viig99/muvfde/blob/main/integeration_test/benchmark.md)
 
 ## References
 * [Google Muvera Blog](https://research.google/blog/muvera-making-multi-vector-retrieval-as-fast-as-single-vector-search/)
