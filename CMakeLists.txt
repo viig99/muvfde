@@ -58,3 +58,17 @@ nanobind_add_module(
 
 # Install directive for scikit-build-core
 install(TARGETS ${SKBUILD_PROJECT_NAME}_ext LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME})
+
+nanobind_add_stub(
+  ${SKBUILD_PROJECT_NAME}_ext_stub
+  MODULE ${SKBUILD_PROJECT_NAME}_ext
+  OUTPUT ${SKBUILD_PROJECT_NAME}_ext.pyi  # sphinx is happy with this one
+  PYTHON_PATH $<TARGET_FILE_DIR:${SKBUILD_PROJECT_NAME}_ext>
+  DEPENDS ${SKBUILD_PROJECT_NAME}_ext
+  MARKER_FILE py.typed
+)
+
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/py.typed
+  ${CMAKE_CURRENT_BINARY_DIR}/${SKBUILD_PROJECT_NAME}_ext.pyi
+  DESTINATION ${SKBUILD_PROJECT_NAME})

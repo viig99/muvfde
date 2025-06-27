@@ -3,21 +3,21 @@
 
 namespace multidimensional_encoding
 {
+    enum class EncodingType
+    {
+        DEFAULT_SUM = 0,
+        AVERAGE = 1
+    };
+    enum class ProjectionType
+    {
+        DEFAULT_IDENTITY = 0,
+        AMS_SKETCH = 1
+    };
 
     class FixedDimensionalEncodingConfig
     {
     public:
         /* ---------- enums kept identical to the proto ---------- */
-        enum class EncodingType
-        {
-            DEFAULT_SUM = 0,
-            AVERAGE = 1
-        };
-        enum class ProjectionType
-        {
-            DEFAULT_IDENTITY = 0,
-            AMS_SKETCH = 1
-        };
 
         /* ---------- ctor with proto-equivalent defaults ---------- */
         FixedDimensionalEncodingConfig()

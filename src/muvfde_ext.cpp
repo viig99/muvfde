@@ -9,7 +9,7 @@ NB_MODULE(muvfde_ext, m) {
     m.doc() = "Convert Multi-dimensional vector's to fixed-dimensional encodings";
 
     // 1) Bind the C++ class
-    auto cfg = nb::class_<multidimensional_encoding::FixedDimensionalEncodingConfig>(m, "FixedDimensionalEncodingConfig")
+    nb::class_<multidimensional_encoding::FixedDimensionalEncodingConfig>(m, "fixed_dimensional_encoding_config", "Configuration for fixed-dimensional encoding of multi-dimensional vectors")
         // default ctor
         .def(nb::init<>())
         // fluent setters
@@ -30,17 +30,16 @@ NB_MODULE(muvfde_ext, m) {
         .def_prop_ro("projection_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::projection_dimension)
         .def_prop_ro("fill_empty_partitions", &multidimensional_encoding::FixedDimensionalEncodingConfig::fill_empty_partitions)
         .def_prop_ro("final_projection_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::final_projection_dimension)
-        ;
+        .def_prop_ro("encoding_type", &multidimensional_encoding::FixedDimensionalEncodingConfig::encoding_type)
+        .def_prop_ro("projection_type", &multidimensional_encoding::FixedDimensionalEncodingConfig::projection_type);
 
-    // 2) Bind EncodingType enum inside the class scope
-    nb::enum_<multidimensional_encoding::FixedDimensionalEncodingConfig::EncodingType>(cfg, "EncodingType")
-        .value("DEFAULT_SUM", multidimensional_encoding::FixedDimensionalEncodingConfig::EncodingType::DEFAULT_SUM)
-        .value("AVERAGE",    multidimensional_encoding::FixedDimensionalEncodingConfig::EncodingType::AVERAGE)
+    nb::enum_<multidimensional_encoding::EncodingType>(m, "encoding_type", "Encoding types for fixed-dimensional encoding of multi-dimensional vectors")
+        .value("DEFAULT_SUM", multidimensional_encoding::EncodingType::DEFAULT_SUM)
+        .value("AVERAGE",    multidimensional_encoding::EncodingType::AVERAGE)
         .export_values();
 
-    // 3) Bind ProjectionType enum inside the class scope
-    nb::enum_<multidimensional_encoding::FixedDimensionalEncodingConfig::ProjectionType>(cfg, "ProjectionType")
-        .value("DEFAULT_IDENTITY", multidimensional_encoding::FixedDimensionalEncodingConfig::ProjectionType::DEFAULT_IDENTITY)
-        .value("AMS_SKETCH",       multidimensional_encoding::FixedDimensionalEncodingConfig::ProjectionType::AMS_SKETCH)
+    nb::enum_<multidimensional_encoding::ProjectionType>(m, "projection_type", "Projection types for fixed-dimensional encoding of multi-dimensional vectors")
+        .value("DEFAULT_IDENTITY", multidimensional_encoding::ProjectionType::DEFAULT_IDENTITY)
+        .value("AMS_SKETCH",       multidimensional_encoding::ProjectionType::AMS_SKETCH)
         .export_values();
 }
