@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core >=0.11.4", "nanobind >=2.7.0", "numpy >=1.23.0"]
+requires = ["scikit-build-core >=0.11.4", "nanobind >=2.7.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -36,7 +36,7 @@ archs = ["auto64"] # Build only 64-bit wheels
 
 # Run pytest to ensure that the package was correctly built
 test-command = "pytest {project}/tests"
-test-requires = "pytest"
+test-requires = "pytest,numpy"
 
 # Don't test Python 3.8 wheels on macOS/arm64
 test-skip="cp38-macosx_*:arm64"
