@@ -80,7 +80,7 @@ kwargs = {
 corpus_chunk_size = 32
 colbert = mteb.get_model(colbert_model_name)
 jina = mteb.get_model(jina_model_name, **kwargs)
-fde_jina_model = FdeLateInteractionModel(jina_model_name, 20, 8, 16, **kwargs)
+fde_jina_model = FdeLateInteractionModel(jina_model_name, 30, 8, 16, **kwargs)
 fde_jina_model.mteb_model_meta = copy.deepcopy(jina.mteb_model_meta)
 fde_jina_model.mteb_model_meta.name = "FDE Jina v2"
 fde_jina_model.mteb_model_meta.revision = "no-revision"
@@ -118,11 +118,11 @@ fde_colbert_scores = res4[0].scores['test'][0]
 df = pd.DataFrame({
     'Metric': list(colbert_scores.keys()),
     'ColBERT v2': list(colbert_scores.values()),
-    'FDE ColBERT v2': [fde_colbert_scores[k] for k in colbert_scores.keys()],
+    'FDE(20,5,16) ColBERT v2': [fde_colbert_scores[k] for k in colbert_scores.keys()],
     'Jina ColBERT v2': [jina_scores[k] for k in colbert_scores.keys()],
-    'FDE Jina v2': [fde_jina_scores[k] for k in colbert_scores.keys()],
+    'FDE(30,8,16) Jina v2': [fde_jina_scores[k] for k in colbert_scores.keys()],
 })
 # Show only .5f
 df = df.round(5)
 df = df.set_index('Metric')
-df.to_markdown("integeration_test/benchmark.md", index=False, tablefmt="github")
+df.to_markdown("integeration_test/benchmark.md", index=True, tablefmt="github")
