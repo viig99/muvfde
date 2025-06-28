@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "muvfde"
 dynamic = ["version"]
-description = "Fixed Dimensional Embeddings for Multi-dimensional vectors."
+description = "A Python library to generate Fixed Dimensional Embeddings for Multi-dimensional embedding vectors based on Google Muvera."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Arjun Variar", email = "accio.arjun@gmail.com" }]
