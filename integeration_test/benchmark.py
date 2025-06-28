@@ -82,6 +82,8 @@ kwargs = {
 corpus_chunk_size = 32
 colbert = mteb.get_model(colbert_model_name)
 jina = mteb.get_model(jina_model_name, **kwargs)
+single_vector = mteb.get_model("intfloat/e5-base-v2", trust_remote_code=True)
+
 fde_jina_model = FdeLateInteractionModel(jina_model_name, 30, 8, 16, **kwargs)
 fde_jina_model.mteb_model_meta = copy.deepcopy(jina.mteb_model_meta)
 fde_jina_model.mteb_model_meta.name = "FDE Jina v2"
@@ -104,18 +106,24 @@ res2 = evaluator.run(jina, eval_splits=["test"], corpus_chunk_size=corpus_chunk_
 res3 = evaluator.run(fde_jina_model,
                      eval_splits=["test"],
                      corpus_chunk_size=corpus_chunk_size,
-                     overwrite_results=True,
+                     overwrite_results=False,
                      verbosity=1)
 res4 = evaluator.run(fde_model_colbert,
                      eval_splits=["test"],
                      corpus_chunk_size=corpus_chunk_size,
-                     overwrite_results=True,
+                     overwrite_results=False,
+                     verbosity=1)
+res5 = evaluator.run(single_vector,
+                     eval_splits=["test"],
+                     corpus_chunk_size=corpus_chunk_size,
+                     overwrite_results=False,
                      verbosity=1)
 
 colbert_scores = res1[0].scores['test'][0]
 jina_scores = res2[0].scores['test'][0]
 fde_jina_scores = res3[0].scores['test'][0]
 fde_colbert_scores = res4[0].scores['test'][0]
+single_vector_scores = res5[0].scores['test'][0]
 
 df = pd.DataFrame({
     'Metric': list(colbert_scores.keys()),
@@ -123,6 +131,7 @@ df = pd.DataFrame({
     'FDE(20,5,16) ColBERT v2': [fde_colbert_scores[k] for k in colbert_scores.keys()],
     'Jina ColBERT v2': [jina_scores[k] for k in colbert_scores.keys()],
     'FDE(30,8,16) Jina v2': [fde_jina_scores[k] for k in colbert_scores.keys()],
+    'Single Vector': [single_vector_scores[k] for k in colbert_scores.keys()],
 })
 # Show only .5f
 df = df.round(5)
