@@ -10,25 +10,27 @@ from pylate import models as colbert_model
 
 # 2. Wrapper takes both configs
 class FdeLateInteractionModel(Wrapper):
-    def __init__(self, model_name: str, num_repetitions: int, num_simhash_projections: int, projection_dimension: int, seed: int = 1221, **kwargs):
+    def __init__(self, model_name: str, num_repetitions: int, num_simhash_projections: int, projection_dimension: int, final_projection_dimension: int | None = None, seed: int = 1221, **kwargs):
         super().__init__()  # empty init for Wrapper
         self.colbert = colbert_model.ColBERT(model_name, revision=None, **kwargs)
+
         query_config = muvfde.fixed_dimensional_encoding_config()
-        query_config.set_num_repetitions(num_repetitions)
-        query_config.set_num_simhash_projections(num_simhash_projections)
-        query_config.set_projection_dimension(projection_dimension)
-        query_config.set_seed(seed)
         query_config.set_encoding_type(muvfde.encoding_type.DEFAULT_SUM)
-        query_config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
 
         doc_config = muvfde.fixed_dimensional_encoding_config()
-        doc_config.set_num_repetitions(num_repetitions)
-        doc_config.set_num_simhash_projections(num_simhash_projections)
-        doc_config.set_projection_dimension(projection_dimension)
-        doc_config.set_seed(seed)
         doc_config.set_encoding_type(muvfde.encoding_type.AVERAGE)
         doc_config.enable_fill_empty(True)
-        doc_config.set_projection_type(muvfde.projection_type.AMS_SKETCH)
+
+        for c in [query_config, doc_config]:
+            c.set_num_repetitions(num_repetitions)
+            c.set_num_simhash_projections(num_simhash_projections)
+            c.set_projection_dimension(projection_dimension)
+            c.set_seed(seed)
+            if final_projection_dimension is not None:
+                c.set_projection_type(muvfde.projection_type.DEFAULT_IDENTITY)
+                c.set_final_projection_dimension(final_projection_dimension)
+            else:
+                c.set_projection_type(muvfde.projection_type.AMS_SKETCH)
 
         self.q_cfg = query_config
         self.d_cfg = doc_config
@@ -55,7 +57,7 @@ class FdeLateInteractionModel(Wrapper):
         for mat in token_embs:
             fde_out.append(
                 muvfde.generate_fixed_dimensional_encoding(
-                    mat.cpu().numpy().astype(np.float32), cfg
+                    mat.cpu().to(torch.float32), cfg
                 )
             )
         return np.stack(fde_out, axis=0)
