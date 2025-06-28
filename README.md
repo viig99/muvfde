@@ -1,5 +1,5 @@
 # MuvFDE
-A library to generate fixed dimensional embeddings for multi-dimensional vectors based on [Google Muvera](https://research.google/blog/muvera-making-multi-vector-retrieval-as-fast-as-single-vector-search/).
+A Python library to generate fixed dimensional embeddings for multi-dimensional vectors based on [Google Muvera](https://research.google/blog/muvera-making-multi-vector-retrieval-as-fast-as-single-vector-search/).
 
 ![Version](https://img.shields.io/pypi/v/muvfde?style=flat-square)
 ![UnitTests](https://img.shields.io/github/actions/workflow/status/viig99/muvfde/pip.yml?branch=main&style=flat-square)
