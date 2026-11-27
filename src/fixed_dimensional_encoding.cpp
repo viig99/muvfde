@@ -1,307 +1,257 @@
 #include "fixed_dimensional_encoding.h"
 
+#include <algorithm>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <random>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 namespace multidimensional_encoding
 {
-
-    constexpr inline uint64_t AppendToGrayCode(uint64_t gray_code, bool bit)
+    namespace
     {
-        return (gray_code << 1) + (bit ^ (gray_code & 1));
-    }
-
-    constexpr inline uint32_t GrayCodeToBinary(uint32_t num)
-    {
-        return num ^ (num >> 1);
-    }
-
-    Eigen::MatrixXf AMSProjectionMatrixFromSeed(uint32_t seed, uint32_t dimension,
-                                                uint32_t projection_dim)
-    {
-        Eigen::MatrixXf out = Eigen::MatrixXf::Zero(dimension, projection_dim);
-        std::mt19937 gen(seed);
-        std::uniform_int_distribution<size_t> index_dist(0, projection_dim - 1);
-        std::bernoulli_distribution sign_dist(0.5);
-        for (int i = 0; i < dimension; ++i)
+        struct EncodingDimensions
         {
-            size_t index = index_dist(gen);
-            out(i, index) = 2.0 * sign_dist(gen) - 1.0;
-        }
-        return out;
-    }
+            Eigen::Index partitions;
+            Eigen::Index projection;
+            Eigen::Index total;
+        };
 
-    Eigen::MatrixXf SimHashMatrixFromSeed(uint32_t seed, uint32_t dimension,
-                                          uint32_t num_projections)
-    {
-        std::mt19937 gen(seed);
-        std::normal_distribution<float> dist(0.0f, 1.0f);
-        return Eigen::MatrixXf::NullaryExpr(dimension, num_projections,
-                                            [&]()
-                                            { return dist(gen); });
-    }
-
-    uint32_t SimHashPartitionIndex(const Eigen::VectorXf &input_vector)
-    {
-        uint32_t partition_index = 0;
-        for (int i = 0; i < input_vector.size(); ++i)
+        EncodingDimensions GetEncodingDimensions(
+            Eigen::Index input_dimension, const FixedDimensionalEncodingConfig &config)
         {
-            partition_index = AppendToGrayCode(partition_index, input_vector[i] > 0);
-        }
-        return partition_index;
-    }
+            if (input_dimension <= 0)
+            {
+                throw std::invalid_argument("Input embeddings must have at least one column.");
+            }
+            if (config.num_repetitions() <= 0)
+            {
+                throw std::invalid_argument("num_repetitions must be positive.");
+            }
+            if (config.num_simhash_projections() < 0 ||
+                config.num_simhash_projections() >= 31)
+            {
+                throw std::invalid_argument(
+                    "Unsupported number of simhash projections: " +
+                    std::to_string(config.num_simhash_projections()));
+            }
+            if (config.final_projection_dimension() < 0)
+            {
+                throw std::invalid_argument("final_projection_dimension must be nonnegative.");
+            }
 
-    uint32_t DistanceToSimHashPartition(const Eigen::VectorXf &input_vector,
-                                        uint32_t index)
-    {
-        uint32_t distance = 0;
-        uint32_t binary_representation = GrayCodeToBinary(index);
-        for (int i = input_vector.size() - 1; i >= 0; --i)
-        {
-            int32_t cur_bit = (input_vector[i] > 0 ? 1 : 0);
-            distance += (cur_bit != (binary_representation & 1));
-            binary_representation >>= 1;
-        }
-        return distance;
-    }
+            const Eigen::Index projection_dim =
+                config.projection_type() == ProjectionType::DEFAULT_IDENTITY
+                    ? input_dimension
+                    : config.projection_dimension();
+            if (projection_dim <= 0)
+            {
+                throw std::invalid_argument(
+                    "A positive projection dimension must be specified in the config "
+                    "if a non-identity projection type is used.");
+            }
 
-    Eigen::VectorXf ApplyCountSketchToVector(
-        const nb::DRef<const Eigen::VectorXf> &input_vector, uint32_t final_dimension,
-        uint32_t seed)
-    {
-        Eigen::VectorXf out = Eigen::VectorXf::Zero(final_dimension);
-        std::mt19937 gen(seed);
-        std::uniform_int_distribution<int32_t> index_dist(0, final_dimension - 1);
-        std::bernoulli_distribution sign_dist(0.5);
-        for (int i = 0; i < input_vector.size(); ++i)
-        {
-            int32_t index = index_dist(gen);
-            float scaling = 2.0 * sign_dist(gen) - 1.0;
-            out[index] += scaling * input_vector[i];
+            const Eigen::Index num_partitions = Eigen::Index{1} << config.num_simhash_projections();
+            const Eigen::Index max_size = std::numeric_limits<Eigen::Index>::max() / sizeof(float);
+            if (projection_dim > max_size / num_partitions / config.num_repetitions())
+            {
+                throw std::overflow_error("The uncompressed FDE is too large.");
+            }
+            return {num_partitions, projection_dim,
+                    config.num_repetitions() * num_partitions * projection_dim};
         }
-        return out;
+
+        uint32_t SimHashPartitionIndex(const Eigen::MatrixXf &sketch, Eigen::Index point)
+        {
+            uint32_t partition = 0;
+            for (Eigen::Index i = 0; i < sketch.cols(); ++i)
+            {
+                partition = (partition << 1) | ((sketch(point, i) > 0) ^ (partition & 1));
+            }
+            return partition;
+        }
+
+        uint32_t SimHashBits(uint32_t partition)
+        {
+            // Each appended bit is XORed with the previous stored bit.
+            return partition ^ (partition >> 1);
+        }
+
+        Eigen::MatrixXf SimHashMatrixFromSeed(uint32_t seed, Eigen::Index dimension,
+                                             Eigen::Index num_projections)
+        {
+            std::mt19937 gen(seed);
+            std::normal_distribution<float> dist(0.0f, 1.0f);
+            return Eigen::MatrixXf::NullaryExpr(dimension, num_projections, [&]()
+                                              { return dist(gen); });
+        }
+
+        Eigen::MatrixXf ApplyAMSProjection(
+            const nb::DRef<const Eigen::MatrixXf> &points,
+            Eigen::Index projection_dim, uint32_t seed)
+        {
+            struct Projection
+            {
+                Eigen::Index bucket;
+                float sign;
+            };
+
+            std::vector<Projection> projections(points.cols());
+            std::mt19937 gen(seed);
+            std::uniform_int_distribution<std::size_t> index_dist(0, projection_dim - 1);
+            std::bernoulli_distribution sign_dist(0.5);
+            for (auto &projection : projections)
+            {
+                projection.bucket = index_dist(gen);
+                projection.sign = sign_dist(gen) ? 1.0f : -1.0f;
+            }
+
+            Eigen::MatrixXf out = Eigen::MatrixXf::Zero(points.rows(), projection_dim);
+            for (Eigen::Index row = 0; row < points.rows(); ++row)
+            {
+                for (Eigen::Index col = 0; col < points.cols(); ++col)
+                {
+                    const auto &projection = projections[col];
+                    out(row, projection.bucket) += projection.sign * points(row, col);
+                }
+            }
+            return out;
+        }
+
+        Eigen::VectorXf ApplyCountSketchToVector(
+            const Eigen::VectorXf &input, int32_t final_dimension, uint32_t seed)
+        {
+            Eigen::VectorXf out = Eigen::VectorXf::Zero(final_dimension);
+            std::mt19937 gen(seed);
+            std::uniform_int_distribution<int32_t> index_dist(0, final_dimension - 1);
+            std::bernoulli_distribution sign_dist(0.5);
+            for (Eigen::Index i = 0; i < input.size(); ++i)
+            {
+                const int32_t index = index_dist(gen);
+                const float sign = sign_dist(gen) ? 1.0f : -1.0f;
+                out[index] += sign * input[i];
+            }
+            return out;
+        }
+
+        struct PartitionRepresentative
+        {
+            uint32_t bits;
+            Eigen::Index point;
+        };
+
+        Eigen::Index NearestPoint(uint32_t partition,
+                                  const std::vector<PartitionRepresentative> &representatives)
+        {
+            const uint32_t bits = SimHashBits(partition);
+            Eigen::Index nearest = representatives.front().point;
+            int min_distance = std::numeric_limits<int>::max();
+            for (const auto &representative : representatives)
+            {
+                const int distance = std::popcount(bits ^ representative.bits);
+                if (distance < min_distance)
+                {
+                    nearest = representative.point;
+                    min_distance = distance;
+                    // The destination partition is empty, so the closest possible distance is one.
+                    if (distance == 1)
+                    {
+                        break;
+                    }
+                }
+            }
+            return nearest;
+        }
     }
 
     Eigen::VectorXf GenerateFixedDimensionalEncoding(
-        const nb::DRef<const Eigen::MatrixXf> &input_embedding_matrix,
-        const FixedDimensionalEncodingConfig &config)
-    {
-        switch (config.encoding_type())
-        {
-        case EncodingType::DEFAULT_SUM:
-            return GenerateQueryFixedDimensionalEncoding(input_embedding_matrix, config);
-        case EncodingType::AVERAGE:
-            return GenerateDocumentFixedDimensionalEncoding(input_embedding_matrix, config);
-        default:
-            throw std::invalid_argument("Unsupported encoding type");
-        }
-    }
-
-    Eigen::VectorXf GenerateQueryFixedDimensionalEncoding(
         const nb::DRef<const Eigen::MatrixXf> &embedding_matrix,
         const FixedDimensionalEncodingConfig &config)
     {
-        if (config.num_simhash_projections() >= 31 ||
-            config.num_simhash_projections() < 0)
+        const bool average = config.encoding_type() == EncodingType::AVERAGE;
+        const bool fill_empty = config.fill_empty_partitions();
+        if (fill_empty && !average)
         {
-            throw std::invalid_argument(
-                "Unsupported number of simhash projections: " +
-                std::to_string(config.num_simhash_projections()));
-        }
-        if (config.fill_empty_partitions())
-        {
-            throw std::invalid_argument(
-                "Query FDE encoding does not support fill_empty_partitions.");
+            throw std::invalid_argument("Query FDE encoding does not support fill_empty_partitions.");
         }
 
-        int32_t num_points = embedding_matrix.rows();
-
-        bool use_identity_encoding =
-            (config.projection_type() ==
-             ProjectionType::DEFAULT_IDENTITY);
-        int32_t projection_dim = use_identity_encoding
-                                     ? embedding_matrix.cols()
-                                     : config.projection_dimension();
-
-        int32_t num_partitions = std::pow(2, config.num_simhash_projections());
-        Eigen::VectorXf out = Eigen::VectorXf::Zero(config.num_repetitions() * num_partitions * projection_dim);
-        // nb::print(nb::str("FDE out_size={}, reps={}, partitions={}, proj_dim={}")
-        //                .format(out.size(), config.num_repetitions(), num_partitions, projection_dim));
-
-        for (int repetition_num = 0; repetition_num < config.num_repetitions();
-             ++repetition_num)
+        const auto [num_partitions, projection_dim, output_size] =
+            GetEncodingDimensions(embedding_matrix.cols(), config);
+        const Eigen::Index num_points = embedding_matrix.rows();
+        if (num_points == 0)
         {
-            Eigen::MatrixXf sketch_matrix;
-            if (config.num_simhash_projections() > 0)
+            return Eigen::VectorXf::Zero(
+                config.has_final_projection_dimension() ? config.final_projection_dimension() : output_size);
+        }
+
+        const bool use_identity = config.projection_type() == ProjectionType::DEFAULT_IDENTITY;
+        const int32_t num_hashes = config.num_simhash_projections();
+        const auto seed = static_cast<uint32_t>(config.seed());
+        Eigen::VectorXf out = Eigen::VectorXf::Zero(output_size);
+        std::vector<Eigen::Index> partition_sizes(average ? num_partitions : 0);
+        std::vector<PartitionRepresentative> representatives;
+
+        for (int repetition = 0; repetition < config.num_repetitions(); ++repetition)
+        {
+            const uint32_t repetition_seed = seed + repetition;
+            Eigen::MatrixXf sketch;
+            if (num_hashes > 0)
             {
-                sketch_matrix = embedding_matrix * SimHashMatrixFromSeed(
-                                                       config.seed() + repetition_num,
-                                                       embedding_matrix.cols(),
-                                                       config.num_simhash_projections());
+                sketch = embedding_matrix * SimHashMatrixFromSeed(
+                    repetition_seed, embedding_matrix.cols(), num_hashes);
             }
+
             Eigen::MatrixXf projected_matrix;
-            if (use_identity_encoding)
+            if (!use_identity)
             {
-                projected_matrix = embedding_matrix;
+                projected_matrix = ApplyAMSProjection(embedding_matrix, projection_dim, repetition_seed);
             }
-            else
-            {
-                if (config.projection_dimension() <= 0)
-                {
-                    throw std::invalid_argument(
-                        "A positive projection dimension must be specified in the config "
-                        "if a non-identity projection type is used.");
-                }
-                projected_matrix =
-                    embedding_matrix * AMSProjectionMatrixFromSeed(
-                                           config.seed() + repetition_num,
-                                           embedding_matrix.cols(), projection_dim);
-            }
-            // Add projected points to their respective partitions in the repetition.
-            for (int cur_point = 0; cur_point < num_points; ++cur_point)
-            {
-                int32_t partition_index =
-                    (config.num_simhash_projections() > 0)
-                        ? SimHashPartitionIndex(sketch_matrix.row(cur_point))
-                        : 0;
-                int32_t index = repetition_num * (num_partitions * projection_dim) +
-                                partition_index * projection_dim;
-                if (index + projection_dim - 1 >= out.size())
-                {
-                    throw std::out_of_range("Index out of bounds.");
-                }
-                for (int k = 0; k < projection_dim; ++k)
-                {
-                    out[index + k] += projected_matrix.coeff(cur_point, k);
-                }
-            } // Finished processing all points in this repetition
-        } // Finished processing all repetitions.
+            const auto points = use_identity ? embedding_matrix
+                                            : nb::DRef<const Eigen::MatrixXf>(projected_matrix);
 
-        if (config.has_final_projection_dimension())
-        {
-            return ApplyCountSketchToVector(
-                out, config.final_projection_dimension(), config.seed());
-        }
-        return out;
-    }
-
-    Eigen::VectorXf GenerateDocumentFixedDimensionalEncoding(
-        const nb::DRef<const Eigen::MatrixXf> &embedding_matrix,
-        const FixedDimensionalEncodingConfig &config)
-    {
-        if (config.num_simhash_projections() >= 31 ||
-            config.num_simhash_projections() < 0)
-        {
-            throw std::invalid_argument(
-                "Unsupported number of simhash projections: " +
-                std::to_string(config.num_simhash_projections()));
-        }
-
-        int32_t num_points = embedding_matrix.rows();
-
-        bool use_identity_encoding =
-            (config.projection_type() ==
-             ProjectionType::DEFAULT_IDENTITY);
-        int32_t projection_dim = use_identity_encoding
-                                     ? embedding_matrix.cols()
-                                     : config.projection_dimension();
-        int32_t num_partitions = std::pow(2, config.num_simhash_projections());
-        Eigen::VectorXf out = Eigen::VectorXf::Zero(
-            config.num_repetitions() * num_partitions * projection_dim);
-        for (int repetition_num = 0; repetition_num < config.num_repetitions();
-             ++repetition_num)
-        {
-            Eigen::MatrixXf sketch_matrix;
-            if (config.num_simhash_projections() > 0)
+            std::fill(partition_sizes.begin(), partition_sizes.end(), 0);
+            representatives.clear();
+            const Eigen::Index repetition_offset = repetition * num_partitions * projection_dim;
+            for (Eigen::Index point = 0; point < num_points; ++point)
             {
-                sketch_matrix = embedding_matrix * SimHashMatrixFromSeed(
-                                                       config.seed() + repetition_num,
-                                                       embedding_matrix.cols(),
-                                                       config.num_simhash_projections());
-            }
-            Eigen::MatrixXf projected_matrix;
-            if (use_identity_encoding)
-            {
-                projected_matrix = embedding_matrix;
-            }
-            else
-            {
-                if (config.projection_dimension() <= 0)
+                const uint32_t partition = SimHashPartitionIndex(sketch, point);
+                out.segment(repetition_offset + partition * projection_dim, projection_dim) +=
+                    points.row(point).transpose();
+                if (average && partition_sizes[partition]++ == 0 && fill_empty)
                 {
-                    throw std::invalid_argument(
-                        "A positive projection dimension must be specified in the config "
-                        "if a non-identity projection type is used.");
+                    // Points sharing a partition have the same Hamming distance.
+                    // Keeping the first point also preserves the reference tie break.
+                    representatives.push_back({SimHashBits(partition), point});
                 }
-                projected_matrix =
-                    embedding_matrix * AMSProjectionMatrixFromSeed(
-                                           config.seed() + repetition_num,
-                                           embedding_matrix.cols(), projection_dim);
             }
 
-            Eigen::VectorXf partition_sizes = Eigen::VectorXf::Zero(num_partitions);
-            for (int cur_point = 0; cur_point < num_points; ++cur_point)
+            if (average)
             {
-                int32_t partition_index =
-                    (config.num_simhash_projections() > 0)
-                        ? SimHashPartitionIndex(sketch_matrix.row(cur_point))
-                        : 0;
-                int32_t index = repetition_num * (num_partitions * projection_dim) +
-                                partition_index * projection_dim;
-                if (index + projection_dim - 1 >= out.size())
+                for (Eigen::Index partition = 0; partition < num_partitions; ++partition)
                 {
-                    throw std::out_of_range("Index out of bounds.");
-                }
-                for (int k = 0; k < projection_dim; ++k)
-                {
-                    out[index + k] += projected_matrix.coeff(cur_point, k);
-                }
-                partition_sizes[partition_index] += 1.0;
-            } // Finished processing all points in this repetition
-
-            for (int partition_index = 0; partition_index < num_partitions;
-                 ++partition_index)
-            {
-                int32_t index = repetition_num * (num_partitions * projection_dim) +
-                                partition_index * projection_dim;
-                // If a partition is empty and 'fill_empty_partitions' is enabled, we add
-                // the closest point to the coordinates of the FDE corresponding to the
-                // empty partition.
-                if (partition_sizes[partition_index] == 0.0 &&
-                    config.num_simhash_projections() > 0)
-                {
-                    if (config.fill_empty_partitions())
+                    auto bucket = out.segment(repetition_offset + partition * projection_dim,
+                                              projection_dim);
+                    const auto count = partition_sizes[partition];
+                    if (count > 0)
                     {
-                        int32_t nearest_point_index = -1;
-                        uint32_t min_distance = std::numeric_limits<uint32_t>::max();
-                        for (int cur_point = 0; cur_point < num_points; ++cur_point)
-                        {
-                            uint32_t cur_distance = DistanceToSimHashPartition(
-                                sketch_matrix.row(cur_point), partition_index);
-                            if (cur_distance < min_distance)
-                            {
-                                min_distance = cur_distance;
-                                nearest_point_index = cur_point;
-                            }
-                        }
-                        for (int k = 0; k < projection_dim; ++k)
-                        {
-                            out[index + k] = projected_matrix.coeff(nearest_point_index, k);
-                        }
+                        bucket /= static_cast<float>(count);
                     }
-                    continue;
-                }
-                // Now normalize each bucket to be the centroid instead of sum of the
-                // bucket.
-                for (int k = 0; k < projection_dim; ++k)
-                {
-                    out[index + k] = out[index + k] / partition_sizes[partition_index];
+                    else if (fill_empty)
+                    {
+                        bucket = points.row(NearestPoint(partition, representatives)).transpose();
+                    }
                 }
             }
-        } // Finished processing all repetitions.
+        }
 
         if (config.has_final_projection_dimension())
         {
-            return ApplyCountSketchToVector(
-                out, config.final_projection_dimension(), config.seed());
+            return ApplyCountSketchToVector(out, config.final_projection_dimension(), seed);
         }
         return out;
     }
-
-}
+} // namespace multidimensional_encoding

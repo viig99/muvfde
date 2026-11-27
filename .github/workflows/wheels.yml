@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        submodules: true
+        fetch-depth: 0
 
     - name: Build SDist
       run: pipx run build --sdist
@@ -38,9 +38,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        submodules: true
+        fetch-depth: 0
 
-    - uses: pypa/cibuildwheel@v3.0.0
+    - uses: pypa/cibuildwheel@v4.3.5
 
     - name: Verify clean directory
       run: git diff --exit-code

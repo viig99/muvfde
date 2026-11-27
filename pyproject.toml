@@ -1,13 +1,14 @@
 [build-system]
-requires = ["scikit-build-core >=0.11.4", "nanobind >=2.7.0"]
+requires = ["scikit-build-core >=0.11.4", "nanobind >=3.1", "setuptools-scm >=8"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "muvfde"
 dynamic = ["version"]
-description = "A Python library to generate Fixed Dimensional Embeddings for Multi-dimensional embedding vectors based on Google Muvera."
+description = "Fixed-dimensional encodings for multi-vector retrieval using Google's MUVERA algorithm."
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = ["numpy"]
 authors = [{ name = "Arjun Variar", email = "accio.arjun@gmail.com" }]
 
 # PEP 639 license metadata
@@ -20,6 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: C++",
@@ -38,6 +41,7 @@ Homepage = "https://github.com/viig99/muvfde"
 [tool.scikit-build]
 # Protect the configuration against future changes in scikit-build-core
 minimum-version = "build-system.requires"
+cmake.version = ">=4.4.5"
 
 # Setuptools-style build caching in a local directory
 build-dir = "build/{wheel_tag}"
@@ -54,15 +58,8 @@ write_to = "src/muvfde/_version.py"
 # Necessary to see build output from the actual compilation
 build-verbosity = 1
 archs = ["auto64"]  # Build only 64-bit wheels
-skip = "pp*"
+build = "cp3{10,11,12,13,14,15}-*"
 
 # Run pytest to ensure that the package was correctly built
 test-command = "pytest {project}/tests"
-test-requires = ["pytest", "numpy"]
-
-# Don't test Python 3.8 wheels on macOS/arm64
-test-skip = "cp38-macosx_*:arm64"
-
-# Needed for full C++17 support
-[tool.cibuildwheel.macos.environment]
-MACOSX_DEPLOYMENT_TARGET = "10.14"
+test-requires = ["pytest"]

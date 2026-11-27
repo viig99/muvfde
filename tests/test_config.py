@@ -30,3 +30,13 @@ def test_config_setters():
     assert config.final_projection_dimension == 4
     assert config.encoding_type == muvfde.encoding_type.AVERAGE
     assert config.projection_type == muvfde.projection_type.AMS_SKETCH
+
+
+def test_config_setters_can_be_chained():
+    config = muvfde.fixed_dimensional_encoding_config()
+    result = config.set_num_repetitions(2).set_seed(42).enable_fill_empty()
+
+    assert result is config
+    assert config.num_repetitions == 2
+    assert config.seed == 42
+    assert config.fill_empty_partitions is True

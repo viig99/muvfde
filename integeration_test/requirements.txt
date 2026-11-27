@@ -1,6 +1,5 @@
-mteb[pylate]
-pylate
-numpy
-pandas
-tabulate
-einops
+huggingface-hub
+pyarrow
+sentence-transformers>=6.0
+transformers>=5.4
+Pillow

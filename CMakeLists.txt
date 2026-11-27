@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15...3.30)
+cmake_minimum_required(VERSION 4.4.5...4.5)
 
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 
@@ -17,7 +17,7 @@ if (NOT SKBUILD)
   in your environment once and use the following command that avoids
   a costly creation of a new virtual environment at every compilation:
   =====================================================================
-   $ pip install nanobind scikit-build-core[pyproject]
+   $ pip install "nanobind>=3.1" scikit-build-core setuptools-scm "cmake>=4.4.5"
    $ pip install --no-build-isolation -ve .
   =====================================================================
   You may optionally add -Ceditable.rebuild=true to auto-rebuild when
@@ -26,12 +26,12 @@ if (NOT SKBUILD)
 endif()
 
 # Try to import all Python components potentially needed by nanobind
-find_package(Python 3.8
+find_package(Python 3.10
   REQUIRED COMPONENTS Interpreter Development.Module
   OPTIONAL_COMPONENTS Development.SABIModule)
 
 # Import nanobind through CMake's find_package mechanism
-find_package(nanobind CONFIG REQUIRED)
+find_package(nanobind 3.1 CONFIG REQUIRED)
 
 # We are now ready to compile the actual extension module
 nanobind_add_module(
@@ -59,6 +59,8 @@ target_include_directories(${SKBUILD_PROJECT_NAME}_ext
   PRIVATE
     ${PROJECT_SOURCE_DIR}
 )
+target_compile_features(${SKBUILD_PROJECT_NAME}_ext PRIVATE cxx_std_20)
+set_target_properties(${SKBUILD_PROJECT_NAME}_ext PROPERTIES CXX_EXTENSIONS OFF)
 
 # Install directive for scikit-build-core
 install(TARGETS ${SKBUILD_PROJECT_NAME}_ext LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME})

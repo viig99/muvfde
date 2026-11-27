@@ -7,21 +7,21 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 NB_MODULE(muvfde_ext, m) {
-    m.doc() = "Convert Multi-dimensional vector's to fixed-dimensional encodings";
+    m.doc() = "Convert multi-vector embeddings to fixed-dimensional encodings.";
 
     // 1) Bind the C++ class
     nb::class_<multidimensional_encoding::FixedDimensionalEncodingConfig>(m, "fixed_dimensional_encoding_config", "Configuration for fixed-dimensional encoding of multi-dimensional vectors")
         // default ctor
         .def(nb::init<>())
         // fluent setters
-        .def("set_num_repetitions", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_num_repetitions, "r"_a)
-        .def("set_num_simhash_projections", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_num_simhash_projections, "k"_a)
-        .def("set_seed", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_seed, "s"_a)
-        .def("set_encoding_type", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_encoding_type, "type"_a)
-        .def("set_projection_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_projection_dimension, "dp"_a)
-        .def("set_projection_type", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_projection_type, "pt"_a)
-        .def("enable_fill_empty", &multidimensional_encoding::FixedDimensionalEncodingConfig::enable_fill_empty, "v"_a = true)
-        .def("set_final_projection_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_final_projection_dimension, "d"_a)
+        .def("set_num_repetitions", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_num_repetitions, "r"_a, nb::rv_policy::reference_internal)
+        .def("set_num_simhash_projections", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_num_simhash_projections, "k"_a, nb::rv_policy::reference_internal)
+        .def("set_seed", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_seed, "s"_a, nb::rv_policy::reference_internal)
+        .def("set_encoding_type", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_encoding_type, "type"_a, nb::rv_policy::reference_internal)
+        .def("set_projection_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_projection_dimension, "dp"_a, nb::rv_policy::reference_internal)
+        .def("set_projection_type", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_projection_type, "pt"_a, nb::rv_policy::reference_internal)
+        .def("enable_fill_empty", &multidimensional_encoding::FixedDimensionalEncodingConfig::enable_fill_empty, "v"_a = true, nb::rv_policy::reference_internal)
+        .def("set_final_projection_dimension", &multidimensional_encoding::FixedDimensionalEncodingConfig::set_final_projection_dimension, "d"_a, nb::rv_policy::reference_internal)
         // read-only accessors as Python properties
         .def_prop_ro("num_repetitions", &multidimensional_encoding::FixedDimensionalEncodingConfig::num_repetitions)
         .def_prop_ro("num_simhash_projections", &multidimensional_encoding::FixedDimensionalEncodingConfig::num_simhash_projections)

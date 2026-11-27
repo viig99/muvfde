@@ -1,139 +1,138 @@
-import numpy as np
-import mteb
+"""Evaluate FDE retrieval and MaxSim reranking on the NFCorpus test split."""
+
+import argparse
+import csv
+from importlib.metadata import version
+
+from huggingface_hub import hf_hub_download
 import muvfde
-import torch
-import pandas as pd
-import copy
-from mteb.encoder_interface import PromptType
-from mteb.models.wrapper import Wrapper
-from pylate import models as colbert_model
+import numpy as np
+from pyarrow.parquet import read_table
+from sentence_transformers import MultiVectorEncoder
 
-# 2. Wrapper takes both configs
-class FdeLateInteractionModel(Wrapper):
-    def __init__(self, model_name: str, num_repetitions: int, num_simhash_projections: int, projection_dimension: int, final_projection_dimension: int | None = None, seed: int = 1221, **kwargs):
-        super().__init__()  # empty init for Wrapper
-        self.colbert = colbert_model.ColBERT(model_name, revision=None, **kwargs)
 
-        query_config = muvfde.fixed_dimensional_encoding_config()
-        query_config.set_encoding_type(muvfde.encoding_type.DEFAULT_SUM)
+MODEL = "lightonai/LateOn-regularized"
+MODEL_REVISION = "4449aa20f8ca4b580b8ab46df7599fa392e9b076"
+DATASET_REVISION = "b5026a0e96e8a7ac4f95f482a596389289d46269"
+QRELS_REVISION = "a451b3b26d3ae1358f259c1a3a4dd61fcea35a65"
 
-        doc_config = muvfde.fixed_dimensional_encoding_config()
-        doc_config.set_encoding_type(muvfde.encoding_type.AVERAGE)
-        doc_config.enable_fill_empty(True)
 
-        for c in [query_config, doc_config]:
-            c.set_num_repetitions(num_repetitions)
-            c.set_num_simhash_projections(num_simhash_projections)
-            c.set_projection_dimension(projection_dimension)
-            c.set_seed(seed)
-            if final_projection_dimension is not None:
-                c.set_projection_type(muvfde.projection_type.DEFAULT_IDENTITY)
-                c.set_final_projection_dimension(final_projection_dimension)
-            else:
-                c.set_projection_type(muvfde.projection_type.AMS_SKETCH)
+def load_nfcorpus():
+    corpus_path = hf_hub_download(
+        "BeIR/nfcorpus", "corpus/corpus-00000-of-00001.parquet",
+        repo_type="dataset", revision=DATASET_REVISION,
+    )
+    queries_path = hf_hub_download(
+        "BeIR/nfcorpus", "queries/queries-00000-of-00001.parquet",
+        repo_type="dataset", revision=DATASET_REVISION,
+    )
+    judgments_path = hf_hub_download(
+        "BeIR/nfcorpus-qrels", "test.tsv", repo_type="dataset", revision=QRELS_REVISION
+    )
+    corpus = read_table(corpus_path).to_pylist()
+    query_text = {row["_id"]: row["text"] for row in read_table(queries_path).to_pylist()}
+    with open(judgments_path, newline="", encoding="utf-8") as file:
+        judgments = list(csv.DictReader(file, delimiter="\t"))
 
-        self.q_cfg = query_config
-        self.d_cfg = doc_config
+    query_ids = sorted({row["query-id"] for row in judgments})
+    document_indices = {row["_id"]: i for i, row in enumerate(corpus)}
+    query_indices = {query_id: i for i, query_id in enumerate(query_ids)}
+    relevance = np.zeros((len(query_ids), len(corpus)), dtype=np.float32)
+    for row in judgments:
+        relevance[query_indices[row["query-id"]], document_indices[row["corpus-id"]]] = int(row["score"])
+    documents = [f'{row["title"] or ""} {row["text"]}'.strip() for row in corpus]
+    return [query_text[query_id] for query_id in query_ids], documents, relevance
 
-    def encode(
-        self,
-        sentences: list[str],
-        *,
-        task_name: str,
-        prompt_type: PromptType | None = None,
-        **kwargs,
-    ) -> np.ndarray:
-        # 1) get token embeddings from the base ColBERT
-        token_embs = self.colbert.encode(
-            sentences,
-            prompt_name=None,
-            is_query=(prompt_type == PromptType.query),
-            **kwargs,
+
+def encode_fdes(embeddings, *, document, center):
+    config = (
+        muvfde.fixed_dimensional_encoding_config()
+        .set_num_repetitions(20)
+        .set_num_simhash_projections(5)
+        .set_projection_type(muvfde.projection_type.AMS_SKETCH)
+        .set_projection_dimension(16)
+        .set_seed(42)
+    )
+    if document:
+        config.set_encoding_type(muvfde.encoding_type.AVERAGE).enable_fill_empty()
+    return np.stack([
+        muvfde.generate_fixed_dimensional_encoding(embedding - center, config)
+        for embedding in embeddings
+    ])
+
+
+def ndcg_at_10(ranking, relevance):
+    gains = np.take_along_axis(relevance, ranking[:, :10], axis=1)
+    ideal = np.sort(relevance, axis=1)[:, -gains.shape[1]:][:, ::-1]
+    discounts = 1 / np.log2(np.arange(2, gains.shape[1] + 2))
+    ideal_dcg = ideal @ discounts
+    dcg = gains @ discounts
+    return np.divide(dcg, ideal_dcg, out=np.zeros_like(dcg), where=ideal_dcg > 0).mean()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model", default=MODEL)
+    parser.add_argument("--revision")
+    parser.add_argument("--device", help="e.g. cpu or cuda (default: auto-detect)")
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--candidates", type=int, default=100)
+    args = parser.parse_args()
+    if args.batch_size < 1 or args.candidates < 10:
+        parser.error("--batch-size must be positive and --candidates must be at least 10")
+
+    queries, documents, relevance = load_nfcorpus()
+    if args.candidates > len(documents):
+        parser.error("--candidates cannot exceed the corpus size")
+    revision = args.revision or (MODEL_REVISION if args.model == MODEL else None)
+    model = MultiVectorEncoder(
+        args.model, revision=revision, device=args.device, similarity_fn_name="maxsim"
+    )
+    encode_options = dict(batch_size=args.batch_size, convert_to_numpy=True, show_progress_bar=True)
+    queries = [np.asarray(x, dtype=np.float32) for x in model.encode_query(queries, **encode_options)]
+    documents = [np.asarray(x, dtype=np.float32) for x in model.encode_document(documents, **encode_options)]
+
+    print("Scoring full-corpus MaxSim...", flush=True)
+    maxsim = np.concatenate([
+        model.similarity(queries[start:start + 8], documents, device=str(model.device)).cpu().numpy()
+        for start in range(0, len(queries), 8)
+    ])
+    exact_top_10 = np.argsort(-maxsim, axis=1, kind="stable")[:, :10]
+    results = [("Full-corpus MaxSim", ndcg_at_10(exact_top_10, relevance), None)]
+
+    # Use the same corpus token mean for documents and queries during FDE generation.
+    center = (
+        sum(document.sum(axis=0, dtype=np.float64) for document in documents)
+        / sum(len(document) for document in documents)
+    ).astype(np.float32)
+    for label, mean in [("Raw", np.float32(0)), ("Mean-centered", center)]:
+        print(f"Scoring {label.lower()} FDEs...", flush=True)
+        query_fdes = encode_fdes(queries, document=False, center=mean)
+        document_fdes = encode_fdes(documents, document=True, center=mean)
+        candidates = np.argsort(-(query_fdes @ document_fdes.T), axis=1, kind="stable")[:, :args.candidates]
+        overlap = np.mean([
+            np.isin(exact_row, candidate_row)
+            for exact_row, candidate_row in zip(exact_top_10, candidates, strict=True)
+        ])
+        # Reuse the exact scores for candidate documents to measure ranking quality.
+        candidate_scores = np.take_along_axis(maxsim, candidates, axis=1)
+        reranked = np.take_along_axis(
+            candidates, np.argsort(-candidate_scores, axis=1, kind="stable"), axis=1
         )
-        # 2) pick the right config
-        cfg = self.q_cfg if prompt_type == PromptType.query else self.d_cfg
-        # 3) compress each [seq_len × dim] matrix → [fde_dim]
-        fde_out = []
-        for mat in token_embs:
-            fde_out.append(
-                muvfde.generate_fixed_dimensional_encoding(
-                    mat.cpu().to(torch.float32), cfg
-                )
-            )
-        return np.stack(fde_out, axis=0)
+        results.append((f"{label} FDE dot product", ndcg_at_10(candidates, relevance), overlap))
+        results.append((f"{label} FDE + MaxSim", ndcg_at_10(reranked, relevance), overlap))
 
-    def similarity(self, a: np.ndarray, b: np.ndarray) -> torch.Tensor:
-        return torch.from_numpy(a @ b.T)
+    print(
+        f"\n{args.model} @ {revision or 'default revision'}, "
+        f"{len(queries)} queries, {len(documents)} documents"
+    )
+    print(f"muvfde {version('muvfde')}, sentence-transformers {version('sentence-transformers')}")
+    print(f"\n| Ranking | nDCG@10 | MaxSim top-10 overlap in FDE top-{args.candidates} |")
+    print("| --- | ---: | ---: |")
+    for label, ndcg, overlap in results:
+        overlap_text = "—" if overlap is None else f"{overlap:.1%}"
+        print(f"| {label} | {ndcg:.4f} | {overlap_text} |")
 
-# 3. Instantiate & run
-colbert_model_name = "colbert-ir/colbertv2.0"
-lightonai_model_name = "lightonai/GTE-ModernColBERT-v1"
-jina_model_name = "jinaai/jina-colbert-v2"
-kwargs = {
-    "trust_remote_code": True,
-    "attend_to_expansion_tokens": True,
-    "query_prefix": "[QueryMarker]",
-    "document_prefix": "[DocumentMarker]",
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "model_kwargs": {
-        "torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
-    }
-}
-corpus_chunk_size = 32
-colbert = mteb.get_model(colbert_model_name)
-jina = mteb.get_model(jina_model_name, **kwargs)
-single_vector = mteb.get_model("intfloat/e5-base-v2", trust_remote_code=True)
 
-fde_jina_model = FdeLateInteractionModel(jina_model_name, 30, 8, 16, **kwargs)
-fde_jina_model.mteb_model_meta = copy.deepcopy(jina.mteb_model_meta)
-fde_jina_model.mteb_model_meta.name = "FDE Jina v2"
-fde_jina_model.mteb_model_meta.revision = "no-revision"
-fde_jina_model.mteb_model_meta.similarity_fn_name = "dot"
-fde_jina_model.mteb_model_meta.framework = []
-
-fde_model_colbert = FdeLateInteractionModel(colbert_model_name, 20, 5, 16)
-fde_model_colbert.mteb_model_meta = copy.deepcopy(colbert.mteb_model_meta)
-fde_model_colbert.mteb_model_meta.name = "FDE ColBERT v2"
-fde_model_colbert.mteb_model_meta.revision = "no-revision"
-fde_model_colbert.mteb_model_meta.similarity_fn_name = "dot"
-fde_model_colbert.mteb_model_meta.framework = []
-
-tasks = mteb.get_tasks(tasks=["NFCorpus"], languages=["eng"], task_types=["Retrieval"])
-evaluator = mteb.MTEB(tasks=tasks)
-
-res1 = evaluator.run(colbert, eval_splits=["test"], corpus_chunk_size=corpus_chunk_size, verbosity=1)
-res2 = evaluator.run(jina, eval_splits=["test"], corpus_chunk_size=corpus_chunk_size, verbosity=1)
-res3 = evaluator.run(fde_jina_model,
-                     eval_splits=["test"],
-                     corpus_chunk_size=corpus_chunk_size,
-                     overwrite_results=False,
-                     verbosity=1)
-res4 = evaluator.run(fde_model_colbert,
-                     eval_splits=["test"],
-                     corpus_chunk_size=corpus_chunk_size,
-                     overwrite_results=False,
-                     verbosity=1)
-res5 = evaluator.run(single_vector,
-                     eval_splits=["test"],
-                     corpus_chunk_size=corpus_chunk_size,
-                     overwrite_results=False,
-                     verbosity=1)
-
-colbert_scores = res1[0].scores['test'][0]
-jina_scores = res2[0].scores['test'][0]
-fde_jina_scores = res3[0].scores['test'][0]
-fde_colbert_scores = res4[0].scores['test'][0]
-single_vector_scores = res5[0].scores['test'][0]
-
-df = pd.DataFrame({
-    'Metric': list(colbert_scores.keys()),
-    'ColBERT v2': list(colbert_scores.values()),
-    'FDE(20,5,16) ColBERT v2': [fde_colbert_scores[k] for k in colbert_scores.keys()],
-    'Jina ColBERT v2': [jina_scores[k] for k in colbert_scores.keys()],
-    'FDE(30,8,16) Jina v2': [fde_jina_scores[k] for k in colbert_scores.keys()],
-    'Single Vector': [single_vector_scores[k] for k in colbert_scores.keys()],
-})
-# Show only .5f
-df = df.round(5)
-df = df.set_index('Metric')
-df.to_markdown("integeration_test/benchmark.md", index=True, tablefmt="github")
+if __name__ == "__main__":
+    main()
